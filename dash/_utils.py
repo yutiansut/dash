@@ -1,3 +1,48 @@
+import uuid
+
+
+def interpolate_str(template, **data):
+    s = template
+    for k, v in data.items():
+        key = '{%' + k + '%}'
+        s = s.replace(key, v)
+    return s
+
+
+def format_tag(tag_name, attributes, inner='', closed=False, opened=False):
+    tag = '<{tag} {attributes}'
+    if closed:
+        tag += '/>'
+    elif opened:
+        tag += '>'
+    else:
+        tag += '>' + inner + '</{tag}>'
+    return tag.format(
+        tag=tag_name,
+        attributes=' '.join([
+            '{}="{}"'.format(k, v) for k, v in attributes.items()]))
+
+
+def generate_hash():
+    return str(uuid.uuid4().hex).strip('-')
+
+
+def get_asset_path(
+        requests_pathname,
+        routes_pathname,
+        asset_path,
+        asset_url_path):
+    i = requests_pathname.rfind(routes_pathname)
+    req = requests_pathname[:i]
+
+    return '/'.join([
+        # Only take the first part of the pathname
+        req,
+        asset_url_path,
+        asset_path
+    ])
+
+
 class AttributeDict(dict):
     """
     Dictionary subclass enabling attribute lookup/assignment of keys/values.

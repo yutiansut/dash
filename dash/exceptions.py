@@ -2,6 +2,10 @@ class DashException(Exception):
     pass
 
 
+class NoLayoutException(DashException):
+    pass
+
+
 class CallbackException(DashException):
     pass
 
@@ -43,4 +47,20 @@ class CantHaveMultipleOutputs(CallbackException):
 
 
 class PreventUpdate(CallbackException):
+    pass
+
+
+class DuplicateIdError(DashException):
+    pass
+
+
+class InvalidCallbackReturnValue(CallbackException):
+    pass
+
+
+class InvalidConfig(DashException):
+    pass
+
+
+class InvalidResourceError(DashException):
     pass

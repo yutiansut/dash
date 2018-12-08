@@ -3,20 +3,20 @@ import collections
 import inspect
 import json
 import os
+import shutil
 import unittest
 import plotly
 
 from dash.development.base_component import (
-    generate_class,
     Component,
-    js_to_py_type,
-    create_docstring,
-    parse_events
-)
+    _explicitize_args)
+from dash.development._py_components_generation import generate_class_string, generate_class_file, generate_class, \
+    create_docstring, parse_events, js_to_py_type
 
 Component._prop_names = ('id', 'a', 'children', 'style', )
 Component._type = 'TestComponent'
 Component._namespace = 'test_namespace'
+Component._valid_wildcard_attributes = ['data-', 'aria-']
 
 
 def nested_tree():
@@ -149,6 +149,16 @@ class TestComponent(unittest.TestCase):
         self.assertEqual(
             elements,
             c.children + [c3] + [c2] + c2.children
+        )
+
+    def test_traverse_with_tuples(self):  # noqa: E501
+        c, c1, c2, c3, c4, c5 = nested_tree()
+        c2.children = tuple(c2.children)
+        c.children = tuple(c.children)
+        elements = [i for i in c.traverse()]
+        self.assertEqual(
+            elements,
+            list(c.children) + [c3] + [c2] + list(c2.children)
         )
 
     def test_iter_with_nested_children_with_mixed_strings_and_without_lists(self):  # noqa: E501
@@ -411,6 +421,25 @@ class TestComponent(unittest.TestCase):
         )
         """
 
+    def test_to_plotly_json_with_wildcards(self):
+        c = Component(id='a', **{'aria-expanded': 'true',
+                                 'data-toggle': 'toggled',
+                                 'data-none': None})
+        c._prop_names = ('id',)
+        c._type = 'MyComponent'
+        c._namespace = 'basic'
+        self.assertEqual(
+            c.to_plotly_json(),
+            {'namespace': 'basic',
+             'props': {
+                 'aria-expanded': 'true',
+                 'data-toggle': 'toggled',
+                 'data-none': None,
+                 'id': 'a',
+             },
+             'type': 'MyComponent'}
+        )
+
     def test_len(self):
         self.assertEqual(len(Component()), 0)
         self.assertEqual(len(Component(children='Hello World')), 1)
@@ -466,6 +495,69 @@ class TestComponent(unittest.TestCase):
         c2_popped = c.pop('2')
         self.assertTrue('2' not in c)
         self.assertTrue(c2_popped is c2)
+
+
+class TestGenerateClassFile(unittest.TestCase):
+    def setUp(self):
+        json_path = os.path.join('tests', 'development', 'metadata_test.json')
+        with open(json_path) as data_file:
+            json_string = data_file.read()
+            data = json\
+                .JSONDecoder(object_pairs_hook=collections.OrderedDict)\
+                .decode(json_string)
+            self.data = data
+
+        # Create a folder for the new component file
+        os.makedirs('TableComponents')
+
+        # Import string not included in generated class string
+        import_string =\
+            "# AUTO GENERATED FILE - DO NOT EDIT\n\n" + \
+            "from dash.development.base_component import" + \
+            " Component, _explicitize_args\n\n\n"
+
+        # Class string generated from generate_class_string
+        self.component_class_string = import_string + generate_class_string(
+            typename='Table',
+            props=data['props'],
+            description=data['description'],
+            namespace='TableComponents'
+        )
+
+        # Class string written to file
+        generate_class_file(
+            typename='Table',
+            props=data['props'],
+            description=data['description'],
+            namespace='TableComponents'
+        )
+        written_file_path = os.path.join(
+            'TableComponents', "Table.py"
+        )
+        with open(written_file_path, 'r') as f:
+            self.written_class_string = f.read()
+
+        # The expected result for both class string and class file generation
+        expected_string_path = os.path.join(
+            'tests', 'development', 'metadata_test.py'
+        )
+        with open(expected_string_path, 'r') as f:
+            self.expected_class_string = f.read()
+
+    def tearDown(self):
+        shutil.rmtree('TableComponents')
+
+    def test_class_string(self):
+        self.assertEqual(
+            self.expected_class_string,
+            self.component_class_string
+        )
+
+    def test_class_file(self):
+        self.assertEqual(
+            self.expected_class_string,
+            self.written_class_string
+        )
 
 
 class TestGenerateClass(unittest.TestCase):
@@ -580,6 +672,16 @@ class TestGenerateClass(unittest.TestCase):
             "Table(Table(children=Table(id='1'), id='2'))"
         )
 
+    def test_repr_with_wildcards(self):
+        c = self.ComponentClass(id='1', **{"data-one": "one",
+                                           "aria-two": "two"})
+        data_first = "Table(id='1', data-one='one', aria-two='two')"
+        aria_first = "Table(id='1', aria-two='two', data-one='one')"
+        repr_string = repr(c)
+        if not (repr_string == data_first or repr_string == aria_first):
+            raise Exception("%s\nDoes not equal\n%s\nor\n%s" %
+                            (repr_string, data_first, aria_first))
+
     def test_docstring(self):
         assert_docstring(self.assertEqual, self.ComponentClass.__doc__)
 
@@ -589,17 +691,50 @@ class TestGenerateClass(unittest.TestCase):
             ['restyle', 'relayout', 'click']
         )
 
+    # This one is kind of pointless now
     def test_call_signature(self):
+        __init__func = self.ComponentClass.__init__
         # TODO: Will break in Python 3
         # http://stackoverflow.com/questions/2677185/
         self.assertEqual(
-            inspect.getargspec(self.ComponentClass.__init__).args,
-            ['self', 'children']
+            inspect.getargspec(__init__func).args,
+            ['self',
+             'children',
+             'optionalArray',
+             'optionalBool',
+             'optionalFunc',
+             'optionalNumber',
+             'optionalObject',
+             'optionalString',
+             'optionalSymbol',
+             'optionalNode',
+             'optionalElement',
+             'optionalMessage',
+             'optionalEnum',
+             'optionalUnion',
+             'optionalArrayOf',
+             'optionalObjectOf',
+             'optionalObjectWithShapeAndNestedDescription',
+             'optionalAny',
+             'customProp',
+             'customArrayProp',
+             'id'] if hasattr(inspect, 'signature') else []
+
+
         )
         self.assertEqual(
-            inspect.getargspec(self.ComponentClass.__init__).defaults,
-            (None, )
+            inspect.getargspec(__init__func).varargs,
+            None if hasattr(inspect, 'signature') else 'args'
         )
+        self.assertEqual(
+            inspect.getargspec(__init__func).keywords,
+            'kwargs'
+        )
+        if hasattr(inspect, 'signature'):
+            self.assertEqual(
+                [str(x) for x in inspect.getargspec(__init__func).defaults],
+                ['None'] + ['undefined'] * 19
+            )
 
     def test_required_props(self):
         with self.assertRaises(Exception):
@@ -673,6 +808,12 @@ class TestMetaDataConversions(unittest.TestCase):
             ['customProp', ''],
 
             ['customArrayProp', 'list'],
+
+            ['data-*', 'string'],
+
+            ['aria-*', 'string'],
+
+            ['in', 'string'],
 
             ['id', 'string'],
 
@@ -749,6 +890,9 @@ def assert_docstring(assertEqual, docstring):
 
             "- customProp (optional)",
             "- customArrayProp (list; optional)",
+            '- data-* (string; optional)',
+            '- aria-* (string; optional)',
+            '- in (string; optional)',
             '- id (string; optional)',
             '',
             "Available events: 'restyle', 'relayout', 'click'",
@@ -900,4 +1044,4 @@ def assert_flow_docstring(assertEqual, docstring):
             "",
             "Available events: "
         ])[i]
-                    )
+                   )

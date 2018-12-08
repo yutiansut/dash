@@ -2,10 +2,6 @@
 
 #### Dash is a Python framework for building analytical web applications. No JavaScript required.
 
-> 📢  Announcement!  
-> Registration is open for a 2 day, Dash master class in Boston, April 14-15.  
-> [Register online here](https://www.eventbrite.com/e/plotcon-workshops-boston-tickets-43138494398?aff=chrisdash)
-
 Build on top of Plotly.js, React, and Flask, Dash ties modern UI elements like dropdowns, sliders, and graphs directly to your analytical python code.
 
 [![CircleCI](https://circleci.com/gh/plotly/dash.svg?style=svg)](https://circleci.com/gh/plotly/dash)
@@ -38,7 +34,7 @@ View the [Dash User Guide](https://plot.ly/dash). It's chock-full of examples, p
 
 Dash is licensed under MIT.
 
-Plotly offers an enterprise-ready deployment and permissioning server teams that are working with Dash apps behind-the-firewall. [Learn more about Dash On-Premises](https://plot.ly/products/on-premise).
+For companies with software budgets, Plotly offers [Dash Deployment Server](https://plot.ly/dash/pricing/), an enterprise-ready platform for hosting Dash apps in a private cloud or on your own servers. [Learn more about Dash Deployment Server](https://plot.ly/dash/pricing/).
 
 ### Contact and Support
 

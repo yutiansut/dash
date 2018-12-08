@@ -1,8 +1,8 @@
-from copy import copy
 import json
 import warnings
+import os
 
-from .development.base_component import Component
+from .development.base_component import ComponentRegistry
 
 
 # pylint: disable=old-style-class
@@ -15,21 +15,30 @@ class Resources:
     def append_resource(self, resource):
         self._resources.append(resource)
 
-    def _filter_resources(self, all_resources):
+    def _filter_resources(self, all_resources, dev_bundles=False):
         filtered_resources = []
         for s in all_resources:
             filtered_resource = {}
+            if 'dynamic' in s:
+                filtered_resource['dynamic'] = s['dynamic']
             if 'namespace' in s:
                 filtered_resource['namespace'] = s['namespace']
-
             if 'external_url' in s and not self.config.serve_locally:
                 filtered_resource['external_url'] = s['external_url']
+            elif 'dev_package_path' in s and dev_bundles:
+                filtered_resource['relative_package_path'] = (
+                    s['dev_package_path']
+                )
             elif 'relative_package_path' in s:
                 filtered_resource['relative_package_path'] = (
                     s['relative_package_path']
                 )
             elif 'absolute_path' in s:
                 filtered_resource['absolute_path'] = s['absolute_path']
+            elif 'asset_path' in s:
+                info = os.stat(s['filepath'])
+                filtered_resource['asset_path'] = s['asset_path']
+                filtered_resource['ts'] = info.st_mtime
             elif self.config.serve_locally:
                 warnings.warn(
                     'A local version of {} is not available'.format(
@@ -50,46 +59,14 @@ class Resources:
 
         return filtered_resources
 
-    def get_all_resources(self):
-        all_resources = []
-        if self.config.infer_from_layout:
-            all_resources = (
-                self.get_inferred_resources() + self._resources
-            )
-        else:
-            all_resources = self._resources
+    def get_all_resources(self, dev_bundles=False):
+        lib_resources = ComponentRegistry.get_resources(self.resource_name)
+        all_resources = lib_resources + self._resources
 
-        return self._filter_resources(all_resources)
-
-    def get_inferred_resources(self):
-        namespaces = []
-        resources = []
-        layout = self.layout
-
-        def extract_resource_from_component(component):
-            # pylint: disable=protected-access
-            if (isinstance(component, Component) and
-                    component._namespace not in namespaces):
-
-                namespaces.append(component._namespace)
-
-                if hasattr(component, self.resource_name):
-
-                    component_resources = copy(
-                        getattr(component, self.resource_name)
-                    )
-                    for r in component_resources:
-                        r['namespace'] = component._namespace
-                    resources.extend(component_resources)
-
-        extract_resource_from_component(layout)
-        for t in layout.traverse():
-            extract_resource_from_component(t)
-        return resources
+        return self._filter_resources(all_resources, dev_bundles)
 
 
-class Css:
-    # pylint: disable=old-style-class
+class Css:  # pylint: disable=old-style-class
     def __init__(self, layout=None):
         self._resources = Resources('_css_dist', layout)
         self._resources.config = self.config
@@ -103,17 +80,13 @@ class Css:
     def get_all_css(self):
         return self._resources.get_all_resources()
 
-    def get_inferred_css_dist(self):
-        return self._resources.get_inferred_resources()
-
     # pylint: disable=old-style-class, no-init, too-few-public-methods
     class config:
         infer_from_layout = True
         serve_locally = False
 
 
-class Scripts:
-    # pylint: disable=old-style-class
+class Scripts:  # pylint: disable=old-style-class
     def __init__(self, layout=None):
         self._resources = Resources('_js_dist', layout)
         self._resources.config = self.config
@@ -124,11 +97,8 @@ class Scripts:
     def append_script(self, script):
         self._resources.append_resource(script)
 
-    def get_all_scripts(self):
-        return self._resources.get_all_resources()
-
-    def get_inferred_scripts(self):
-        return self._resources.get_inferred_resources()
+    def get_all_scripts(self, dev_bundles=False):
+        return self._resources.get_all_resources(dev_bundles)
 
     # pylint: disable=old-style-class, no-init, too-few-public-methods
     class config:
